@@ -136,15 +136,46 @@ static void become_daemon(void)
     close_low_fds();
 }
 
-int pidfile(const char *file)
+static errno_t get_path_from_pid(pid_t pid, char **path)
+{
+    int err;
+    ssize_t ret;
+    char proc_path[32];
+    char buf[PATH_MAX];
+
+    ret = snprintf(proc_path, sizeof(proc_path), "/proc/%d/exe", pid);
+    if (ret < 0) {
+        DEBUG(SSSDBG_CRIT_FAILURE, "snprintf failed\n");
+        return EINVAL;
+    }
+
+    ret = readlink(proc_path, buf, PATH_MAX);
+    if (ret < 0) {
+        err = errno;
+        DEBUG(SSSDBG_CRIT_FAILURE,
+              "readlink failed [%d][%s].\n", err, strerror(err));
+        return err;
+    }
+
+    *path = strdup(buf);
+    if (*path == NULL) {
+        err = errno;
+        DEBUG(SSSDBG_CRIT_FAILURE,
+              "strdup failed [%d][%s].\n", err, strerror(err));
+        return err;
+    }
+
+    return EOK;
+}
+
+int is_pidfile_unavail(const char *file, const char *prog)
 {
     char pid_str[32];
+    char *path;
     pid_t pid;
     int fd;
     int ret, err;
     ssize_t len;
-    size_t size;
-    ssize_t written;
     ssize_t pidlen = sizeof(pid_str) - 1;
 
     fd = open(file, O_RDONLY, 0644);
@@ -170,8 +201,14 @@ int pidfile(const char *file)
             ret = kill(pid, 0);
             /* succeeded in signaling the process -> another sssd process */
             if (ret == 0) {
-                close(fd);
-                return EEXIST;
+                ret = get_path_from_pid(pid, &path);
+                if (ret == EOK) {
+                    if (strncmp(prog, path, PATH_MAX) == 0) {
+                        close(fd);
+                        return EEXIST;
+                    }
+                }
+                /* If an error occurs while processing the PID file -> the process terminated at this time */
             }
             if (ret != 0 && errno != ESRCH) {
                 err = errno;
@@ -194,6 +231,23 @@ int pidfile(const char *file)
         if (err != ENOENT) {
             return err;
         }
+    }
+
+    return 0;
+}
+
+
+int pidfile(const char *file)
+{
+    char pid_str[32];
+    int fd;
+    int ret, err;
+    size_t size;
+    ssize_t written;
+
+    ret = is_pidfile_unavail(file, progname);
+    if (ret != EOK) {
+        return ret;
     }
 
     fd = open(file, O_CREAT | O_WRONLY | O_EXCL, 0644);

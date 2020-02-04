@@ -36,6 +36,7 @@
 #include <tevent.h>
 #include <ldb.h>
 #include <dhash.h>
+#include <limits.h>
 
 #include "confdb/confdb.h"
 #include "shared/io.h"
@@ -85,6 +86,7 @@
 
 extern int socket_activated;
 extern int dbus_activated;
+extern char progname[PATH_MAX];
 
 #ifdef HAVE_SYSTEMD
 #define SSSD_RESPONDER_OPTS \
@@ -184,6 +186,7 @@ errno_t server_common_rotate_logs(struct confdb_ctx *confdb,
                                   const char *conf_entry);
 int die_if_parent_died(void);
 int pidfile(const char *file);
+int is_pidfile_unavail(const char *file, const char *prog);
 int server_setup(const char *name, int flags,
                  uid_t uid, gid_t gid,
                  const char *conf_entry,

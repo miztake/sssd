@@ -2374,6 +2374,8 @@ int main(int argc, const char *argv[])
     /* Set debug level to invalid value so we can decide if -d 0 was used. */
     debug_level = SSSDBG_INVALID;
 
+    strncpy(progname, realpath(argv[0], NULL), sizeof(progname)-1);
+
     pc = poptGetContext(argv[0], argc, argv, long_options, 0);
     while((opt = poptGetNextOpt(pc)) != -1) {
         switch(opt) {
@@ -2509,10 +2511,13 @@ int main(int argc, const char *argv[])
     if (opt_genconf == 0) {
         ret = check_file(SSSD_PIDFILE, 0, 0, S_IFREG|0600, 0, NULL, false);
         if (ret == EOK) {
-            DEBUG(SSSDBG_FATAL_FAILURE,
-                "pidfile exists at %s\n", SSSD_PIDFILE);
-            ERROR("SSSD is already running\n");
-            return 2;
+            ret = is_pidfile_unavail(SSSD_PIDFILE, progname);
+            if (ret != EOK) {
+                DEBUG(SSSDBG_FATAL_FAILURE,
+                    "pidfile exists at %s\n", SSSD_PIDFILE);
+                ERROR("SSSD is already running\n");
+                return 2;
+            }
         }
 
         /* Warn if nscd seems to be running */

@@ -35,6 +35,7 @@
 
 int socket_activated = 0;
 int dbus_activated = 0;
+char progname[PATH_MAX];
 
 static void free_args(char **args)
 {
